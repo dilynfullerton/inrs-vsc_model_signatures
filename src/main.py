@@ -3,6 +3,7 @@ from __future__ import division, print_function
 import numpy as np
 from itertools import count
 from numpy import sqrt
+from scipy.integrate import quad
 from matplotlib import pyplot as plt
 
 from qutip import *
@@ -24,10 +25,7 @@ def dipole(model_space, mu_ge, mu_ev):
 
 
 def alpha(model_space, dipole_op, hamiltonian_op, omega_L, omega_i):
-    assert isinstance(model_space, ModelSpace)
-    assert isinstance(hamiltonian_op, Qobj)
     div_op = hamiltonian_op - (omega_L+omega_i) * model_space.identity
-    assert isinstance(div_op, Qobj)
     mat = div_op.data.toarray()
     newmat = np.linalg.inv(mat)
     mul_op = Qobj(newmat, dims=div_op.dims)
@@ -67,23 +65,28 @@ if __name__ == '__main__':
         omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
     )
 
-    # Plots sum_R vs g/w_v
+    # Plot sum_R vs g/w_v
     xdat = np.linspace(0, 0.4, 50)
     ydat = np.empty_like(xdat)
     for xi, i in zip(xdat, count()):
         gi = xi * omega_v
-        h0 = HamiltonianSystem(
+        ham = HamiltonianSystem(
             model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
             omega_L=omega_L, Omega_p=Omega_p, s=s, g=gi
-        ).h0
+        )
+        h0 = ham.h0
         mu = dipole(model_space=ms, mu_ge=omega_e, mu_ev=omega_e-omega_v)
         alpha_op = alpha(
             model_space=ms, dipole_op=mu, hamiltonian_op=h0,
             omega_L=omega_L, omega_i=0
         )
-        ydat[i] = abs(sum_R(alpha_op=alpha_op, ground=ms.vacuum))
+        ydat[i] = abs(sum_R(alpha_op=alpha_op, ground=h0.groundstate()[1]))
         print(ydat[i])
     plt.figure(1)
     plt.plot(xdat, ydat, '-')
     plt.show()
 
+    # Plot S(omega) vs omega_L - omega
+    xdat = np.linspace(10*100, 60*100, 50)
+    ydat = np.empty_like(xdat)
+    omega_dat = omega_L * np.ones_like(xdat) - xdat
