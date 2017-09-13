@@ -4,11 +4,26 @@ import numpy as np
 from itertools import count
 from numpy import sqrt, log
 from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from qutip import *
 
 import constants as const
 from operators import ModelSpace, HamiltonianSystem
+
+
+OMEGA_E = .4 * 5 / (const.PLANK_CONST_H * const.C0) / 100
+OMEGA_V = 1730
+OMEGA_L = (OMEGA_E + OMEGA_V) / 2
+OMEGA_P = .1 * OMEGA_V
+OMEGA_R = 160
+GAMMA_V = 13  # [1/cm]
+GAMMA_E = 50  # [1/cm]
+KAPPA = 13  # Cavity losses [1/cm]
+S = 2
+EX_C = 3
+EX_V = 3
+EX_E = 1
 
 
 # Construct dipole operator
@@ -54,7 +69,95 @@ def c_ops(
     return cops
 
 
+def plot2ab(
+        n_parts=1,
+        omega_e=OMEGA_E,
+        omega_L=OMEGA_L,
+        omega_v=OMEGA_V,
+        omega_c=OMEGA_V,
+        Omega_p=OMEGA_P,
+        Omega_R_strong=OMEGA_R,
+        Omega_R_weak=0,
+        gamma_v=GAMMA_V,
+        gamma_e=GAMMA_E,
+        kappa=KAPPA,
+        s=S,
+        excitations_c=EX_C,
+        excitations_v=EX_V,
+        excitations_e=EX_E,
+        xmin=0,
+        xmax=6000,
+        npts=501,
+):
+    xdat = np.linspace(xmin, xmax, npts)
+
+    def result(g):
+        ms = ModelSpace(
+            num_molecules=n_parts,
+            num_excitations=(excitations_c, excitations_v, excitations_e)
+        )
+        cops_list = c_ops(
+            model_space=ms,
+            kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
+            gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
+        )
+        h_g = HamiltonianSystem(
+            model_space=ms, omega_c=omega_c, omega_v=omega_v,
+            omega_e=omega_e, omega_L=omega_L, Omega_p=Omega_p,
+            s=s, g=g
+        )
+        return spectrum(
+            H=h_g(t=0), wlist=-xdat, c_ops=cops_list,
+            a_op=ms.total_creator_e, b_op=ms.total_annihilator_e,
+        ) / n_parts
+
+    g_vals = [omr/2/sqrt(n_parts) for omr in [Omega_R_weak, Omega_R_strong]]
+    ydat_weak, ydat_strong = [result(g) for g in g_vals]
+
+    omega_plus = omega_v * sqrt(1 + 2 * g_vals[1] / omega_v)
+    omega_minus = omega_v * sqrt(1 - 2 * g_vals[1] / omega_v)
+
+    # Print crap
+    title = 'S(omega)/N vs omega_L - omega'
+    print('\n\nPlot: {}'.format(title))
+    for xi, y1i, y2i in zip(xdat, ydat_weak, ydat_strong):
+        print('  {:16.8f}    {:16.8E}    {:16.8E}'.format(xi, y1i, y2i))
+
+    fig, ax1 = plt.subplots(1, 1)
+    divider = make_axes_locatable(ax1)
+    ax2 = divider.new_vertical(size='100%', pad=0.05)
+    fig.add_axes(ax2)
+    ax2.plot(xdat, ydat_weak, '-')
+    ax1.plot(xdat, ydat_strong, '-')
+    # Plot vertical lines
+    for n in count(1):
+        vline = n * omega_v
+        if vline < min(xdat):
+            continue
+        elif vline > max(xdat):
+            break
+        else:
+            ax1.axvline(vline, color='orange')
+            ax2.axvline(vline, color='orange')
+            for k in range(n+1):
+                l = n - k
+                ax1.axvline(
+                    k * omega_plus + l * omega_minus,
+                    linestyle='dashed', color='green'
+                )
+    ax1.set_title(title)
+    ax1.set_xlabel('omega_L - omega')
+    ax2.set_ylabel('S(omega)/N, weak')
+    ax1.set_ylabel('S(omega)/N, strong')
+    ax1.set_yscale('log')
+    ax2.set_yscale('log')
+    plt.show()
+    return xdat, ydat_weak, ydat_strong
+
+
 if __name__ == '__main__':
+    plot2ab()
+    assert False
     # Script parameters
     n_parts = 1  # Number of paticles
 
