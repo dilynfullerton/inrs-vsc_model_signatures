@@ -11,8 +11,9 @@ from qutip import *
 import constants as const
 from operators import ModelSpace, HamiltonianSystem
 
+PARALLEL = False
 
-OMEGA_E = .4 * 5 / (const.PLANK_CONST_H * const.C0) / 100
+OMEGA_E = .02 / (const.PLANK_CONST_H * const.C0)
 OMEGA_V = 1730
 OMEGA_L = (OMEGA_E + OMEGA_V) / 2
 OMEGA_P = .1 * OMEGA_V
@@ -69,66 +70,77 @@ def c_ops(
     return cops
 
 
+def _par_spec_ham(h, **kwargs):
+    return spectrum(
+        H=h,
+        wlist=kwargs['wlist'],
+        c_ops=kwargs['c_ops'],
+        a_op=kwargs['a_op'],
+        b_op=kwargs['b_op'],
+    )
+
+
 def plot2ab(
-        n_parts=1,
-        omega_e=OMEGA_E,
-        omega_L=OMEGA_L,
-        omega_v=OMEGA_V,
-        omega_c=OMEGA_V,
-        Omega_p=OMEGA_P,
-        Omega_R_strong=OMEGA_R,
-        Omega_R_weak=0,
-        gamma_v=GAMMA_V,
-        gamma_e=GAMMA_E,
-        kappa=KAPPA,
-        s=S,
-        excitations_c=EX_C,
-        excitations_v=EX_V,
-        excitations_e=EX_E,
-        xmin=0,
-        xmax=6000,
-        npts=501,
+        excitations=(3, 3, 1), n_parts=1, omega_e=OMEGA_E, omega_L=OMEGA_L,
+        omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P,
+        Omega_R_strong=OMEGA_R, Omega_R_weak=0, gamma_v=GAMMA_V,
+        gamma_e=GAMMA_E, kappa=KAPPA, s=S, xmin=0, xmax=6000, npts=501,
 ):
-    xdat = np.linspace(xmin, xmax, npts)
-
-    def result(g):
-        ms = ModelSpace(
-            num_molecules=n_parts,
-            num_excitations=(excitations_c, excitations_v, excitations_e)
-        )
-        cops_list = c_ops(
-            model_space=ms,
-            kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
-            gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
-        )
-        h_g = HamiltonianSystem(
-            model_space=ms, omega_c=omega_c, omega_v=omega_v,
-            omega_e=omega_e, omega_L=omega_L, Omega_p=Omega_p,
-            s=s, g=g
-        )
-        return spectrum(
-            H=h_g(t=0), wlist=-xdat, c_ops=cops_list,
-            a_op=ms.total_creator_e, b_op=ms.total_annihilator_e,
-        ) / n_parts
-
+    ms = ModelSpace(num_molecules=n_parts, num_excitations=excitations)
+    cops_list = c_ops(
+        model_space=ms, kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
+        gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
+    )
     g_vals = [omr/2/sqrt(n_parts) for omr in [Omega_R_weak, Omega_R_strong]]
-    ydat_weak, ydat_strong = [result(g) for g in g_vals]
+    hams = []
+    for gi in g_vals:
+        hi = HamiltonianSystem(
+            model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
+            omega_L=omega_L, Omega_p=Omega_p, s=s, g=gi
+        )
+        hams.append(hi(t=0))
+
+    # Get plots
+    xdat = np.linspace(xmin, xmax, npts)
+    if PARALLEL:
+        ydats = parallel_map(
+            _par_spec_ham, hams,
+            task_kwargs={
+                'wlist': -xdat, 'c_ops': cops_list,
+                'a_op': ms.total_creator_e,
+                'b_op': ms.total_annihilator_e,
+            }
+        )
+    else:
+        ydats = []
+        for h in hams:
+            ydats.append(_par_spec_ham(
+                h, wlist=-xdat, c_ops=cops_list,
+                a_op=ms.total_creator_e, b_op=ms.total_annihilator_e
+            ))
+    ydat_weak, ydat_strong = [ydat_i / n_parts for ydat_i in ydats]
 
     omega_plus = omega_v * sqrt(1 + 2 * g_vals[1] / omega_v)
     omega_minus = omega_v * sqrt(1 - 2 * g_vals[1] / omega_v)
 
     # Print crap
     title = 'S(omega)/N vs omega_L - omega'
-    print('\n\nPlot: {}'.format(title))
-    for xi, y1i, y2i in zip(xdat, ydat_weak, ydat_strong):
-        print('  {:16.8f}    {:16.8E}    {:16.8E}'.format(xi, y1i, y2i))
+    print('\n\nFigure: {}'.format(title))
+    lab1 = 'S(omega), weak corr.'
+    print('\nPlot: {}'.format(lab1))
+    for xi, yi in zip(xdat, ydat_weak):
+        print('  {:16.8f}    {:16.8E}'.format(xi, yi))
+    lab2 = 'S(omega), strong corr.'
+    print('\nPlot: {}'.format(lab2))
+    for xi, yi in zip(xdat, ydat_strong):
+        print('  {:16.8f}    {:16.8E}'.format(xi, yi))
 
     fig, ax1 = plt.subplots(1, 1)
     divider = make_axes_locatable(ax1)
     ax2 = divider.new_vertical(size='100%', pad=0.05)
     fig.add_axes(ax2)
-    ax2.plot(xdat, ydat_weak, '-')
-    ax1.plot(xdat, ydat_strong, '-')
+    ax2.plot(xdat, ydat_weak, '-', label=lab1)
+    ax1.plot(xdat, ydat_strong, '-', label=lab2)
     # Plot vertical lines
     for n in count(1):
         vline = n * omega_v
@@ -152,142 +164,119 @@ def plot2ab(
     ax1.set_yscale('log')
     ax2.set_yscale('log')
     plt.show()
+
     return xdat, ydat_weak, ydat_strong
 
 
-if __name__ == '__main__':
-    plot2ab()
-    assert False
-    # Script parameters
-    n_parts = 1  # Number of paticles
-
-    omega_v = 1730  # Vibrational/cavity frequency [1/cm]
-    omega_c = omega_v
-    omega_e = 5 / (const.PLANK_CONST_H * const.C0) / 100  # Electronic frequency [1/cm]
-    omega_L = omega_v * sqrt(omega_e/omega_v)
-    # omega_L = 6 * omega_v
-    # Omega_p = omega_v**2 / omega_L
-    # Omega_p = omega_v**2 / omega_e
-    Omega_p = .1 * omega_v
-    Omega_R = 160  # Rabi splitting [1/cm]
-
-    gamma_v = 13  # [1/cm]
-    gamma_e = 50  # [1/cm]
-    kappa = 13  # Cavity losses [1/cm]
-
-    omega_e = .4 * omega_e
-    omega_L = 0.5 * (omega_e - omega_v) + omega_v
-
-    s = 2
-    # g = .05 * omega_v
-    g = Omega_R/2/sqrt(n_parts)
-
-    # Get polariton eigenvalues
-    omega_plus = omega_v * sqrt(1 + 2 * g / omega_v)
-    omega_minus = omega_v * sqrt(1 - 2 * g / omega_v)
-
-    # Construct Hilbert space
-    # TODO: Figure out proper number of excitations
-    ms = ModelSpace(num_molecules=n_parts, num_excitations=(3, 3, 1))
-
-    # Construct collapse operators
-    c_ops_list = c_ops(
-        model_space=ms,
-        kappa=kappa,
-        gamma_v=gamma_v,
-        gamma_e=gamma_e,
-        gamma_v_phi=gamma_v,
-        gamma_e_phi=gamma_e,
+def _par_spec_ops(ops, **kwargs):
+    return spectrum(
+        H=kwargs['H'],
+        wlist=kwargs['wlist'],
+        c_ops=kwargs['c_ops'],
+        a_op=ops[0],
+        b_op=ops[1]
     )
 
-    # Construct Hamiltonian system
-    hamiltonian = HamiltonianSystem(
-        model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-        omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
+
+def plot3(
+        excitations=(2, 2, 1), omega_e=OMEGA_E, omega_L=OMEGA_L,
+        omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P, Omega_R=OMEGA_R,
+        gamma_v=GAMMA_V, gamma_e=GAMMA_E, kappa=KAPPA, s=S,
+        xmin=1500, xmax=2000, npts=501,
+):
+    # Print
+    title = 'First Stokes lines for N=1, N=2'
+    print('\n\nFigure: {}'.format(title))
+    xdat = np.linspace(xmin, xmax, npts)
+
+    # Get data for N=1
+    ms1 = ModelSpace(num_molecules=1, num_excitations=excitations)
+    ham1 = HamiltonianSystem(
+        model_space=ms1, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
+        omega_L=omega_L, Omega_p=Omega_p, s=s, g=Omega_R/2/sqrt(1)
+    )
+    cops1 = c_ops(
+        model_space=ms1, kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
+        gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
     )
 
-    # Plot sum_R vs g/w_v
-    xdat = np.linspace(0, 0.4, 50)
-    ydat = np.empty_like(xdat)
-    ydat2 = np.empty_like(xdat)
-    ydat3 = np.empty_like(xdat)
-    for xi, i in zip(xdat, count()):
-        gi = xi * omega_v
-        mu = dipole(model_space=ms, mu_ge=omega_e, mu_ev=omega_e-omega_v)
-        ham = HamiltonianSystem(
-            model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-            omega_L=omega_L, Omega_p=Omega_p, s=s, g=gi
-        )
-        h0 = ham.h0
-        alpha_op = alpha(
-            model_space=ms, dipole_op=mu, hamiltonian_op=h0,
-            omega_L=omega_L, omega_i=0
-        )
-        ham2 = ham(t=0)
-        alpha_op2 = alpha(
-            model_space=ms, dipole_op=mu, hamiltonian_op=ham2,
-            omega_L=omega_L, omega_i=0
-        )
-        ham3 = ham.h0c
-        alpha_op3 = alpha(
-            model_space=ms, dipole_op=mu, hamiltonian_op=ham3,
-            omega_L=omega_L, omega_i=0
-        )
-        ydat[i] = abs(sum_R(alpha_op=alpha_op, ground=h0.groundstate()[1]))
-        ydat2[i] = abs(sum_R(alpha_op=alpha_op2, ground=ham2.groundstate()[1]))
-        ydat3[i] = abs(sum_R(alpha_op=alpha_op3, ground=ham3.groundstate()[1]))
-    title = 'Sum_R vs g/omega_v'
-    print('\n\nPlot: {}'.format(title))
-    for xi, y1i, y2i, y3i in zip(xdat, ydat, ydat2, ydat3):
-        print('  {:16.8f}    {:16.8f}    {:16.8f}    {:16.8f}'
-              ''.format(xi, y1i, y2i, y3i))
-    # fig, ax = plt.subplots(1, 1)
-    # ax.plot(xdat, ydat, '-', label='h0')
-    # ax.plot(xdat, ydat3, '-', label='h0c')
-    # ax.legend()
-    # ax.set_title(title)
-    # ax.set_xlabel('g/omega_v')
-    # ax.set_ylabel('sum_R')
-    # plt.show()
-
-    # Plot S(omega) vs omega_L - omega
-    # omegadat = np.linspace(omega_L, omega_v, 500)
-    # xdat = omega_L - omegadat
-    xdat = np.linspace(0, 6000, 500+1)
-    ydat = np.empty_like(xdat)
-    ham = HamiltonianSystem(
-        model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-        omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
+    # First plot: N=1
+    ydat1 = spectrum(
+        H=ham1(t=0), wlist=-xdat, c_ops=cops1,
+        a_op=ms1.total_creator_e, b_op=ms1.total_annihilator_e
     )
-    title = 'S(omega)/N vs omega_L - omega'
-    print('\n\nPlot: {}'.format(title))
-    print('    H = \n    {}'.format(ham.h0))
-    print('    c_e = \n    {}'.format(ms.total_creator_e))
-    print('    a_e = \n    {}'.format(ms.total_annihilator_e))
-    ydat = spectrum(
-        H=ham(t=0), wlist=-xdat,
-        c_ops=c_ops_list,
-        a_op=ms.total_creator_e, b_op=ms.total_annihilator_e,
-    ) / n_parts
-    for xi, yi in zip(xdat, ydat):
-        print('  {:16.8f}    {:16.8E}'.format(xi, yi))
+    # Print
+    lab1 = 'N=1'
+    print('\n  BEGIN Plot: {}'.format(lab1))
+    for xi, yi in zip(xdat, ydat1):
+        print('    {:16.8f}    {:16.8E}'.format(xi, yi))
+    print('\n  END Plot: {}'.format(lab1))
+
+    # Get data for N=2
+    ms2 = ModelSpace(num_molecules=2, num_excitations=excitations)
+    ham2 = HamiltonianSystem(
+        model_space=ms2, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
+        omega_L=omega_L, Omega_p=Omega_p, s=s, g=Omega_R/2/sqrt(2)
+    )
+    cops2 = c_ops(
+        model_space=ms2, kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
+        gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
+    )
+
+    # Second plot: N=2, coherent
+    spec = spectrum(
+        H=ham2(t=0), wlist=-xdat, c_ops=cops2,
+        a_op=ms2.total_creator_e, b_op=ms2.total_annihilator_e
+    )
+    assert isinstance(spec, np.ndarray)
+    ydat2 = .5 * spec
+    # Print
+    lab2 = 'N=2, coherent'
+    print('\n  BEGIN Plot: {}'.format(lab2))
+    for xi, yi in zip(xdat, ydat2):
+        print('    {:16.8f}    {:16.8E}'.format(xi, yi))
+    print('\n  END Plot: {}'.format(lab2))
+
+    # Third plot: N=2, incoherent
+    ce_op = ms2.creator_e
+    ae_op = ms2.annihilator_e
+    if PARALLEL:
+        ydats3 = parallel_map(
+            _par_spec_ops, [(ce_op(i), ae_op(i)) for i in range(ms2.n)],
+            task_kwargs={'H': ham2(t=0), 'wlist': -xdat, 'c_ops': cops2}
+        )
+    else:
+        ydats3 = []
+        for i in range(ms2.n):
+            ydats3.append(
+                _par_spec_ops(ops=(ce_op(i), ae_op(i)), H=ham2(t=0),
+                              wlist=-xdat, c_ops=cops2)
+            )
+    ydat3 = .5 * sum(ydats3, np.zeros_like(xdat))
+    # Print
+    lab3 = 'N=2, incoherent'
+    print('\n  BEGIN Plot: {}'.format(lab3))
+    for xi, yi in zip(xdat, ydat3):
+        print('    {:16.8f}    {:16.8E}'.format(xi, yi))
+    print('\n  END Plot: {}'.format(lab3))
+
+    # Make and show plots
     fig, ax = plt.subplots(1, 1)
-    ax.plot(xdat, ydat, '-')
-    # Plot vertical lines
-    for n in count(1):
-        vline = n * omega_v
-        if vline < min(xdat):
-            continue
-        elif vline > max(xdat):
-            break
-        else:
-            ax.axvline(vline, color='orange')
-            for k in range(n+1):
-                l = n - k
-                ax.axvline(k * omega_plus + l * omega_minus,
-                           linestyle='dashed', color='green')
-    ax.set_title(title)
     ax.set_xlabel('omega_L - omega')
     ax.set_ylabel('S(omega)/N')
-    ax.set_yscale('log')
+    ax.set_title(title)
+    ax.plot(xdat, ydat1, '--', label=lab1)
+    ax.plot(xdat, ydat2, '-', label=lab2)
+    ax.plot(xdat, ydat3, '-', label=lab3)
+    ax.legend()
     plt.show()
+    return xdat, ydat1, ydat2, ydat3
+
+
+def plot2in():
+    pass
+
+
+if __name__ == '__main__':
+    plot3(excitations=(1, 1, 1))
+    # plot2ab(excitations=(3, 3, 1))
