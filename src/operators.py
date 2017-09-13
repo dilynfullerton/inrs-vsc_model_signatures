@@ -12,6 +12,12 @@ class ModelSpace:
         self.annihilator_c = tensor(
             destroy(2), tensor([qeye(2)] * self.n), tensor([qeye(2)] * self.n))
         self.creator_c = self.annihilator_c.dag()
+        self.total_annihilator_v = sum(
+            (self.annihilator_v(i) for i in range(self.n)), 0)
+        self.total_creator_v = self.total_annihilator_v.dag()
+        self.total_annihilator_e = sum(
+            (self.annihilator_e(i) for i in range(self.n)), 0)
+        self.total_creator_e = self.total_annihilator_e.dag()
 
         # Kets
         self.vacuum = tensor(

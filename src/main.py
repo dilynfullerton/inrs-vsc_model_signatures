@@ -3,7 +3,6 @@ from __future__ import division, print_function
 import numpy as np
 from itertools import count
 from numpy import sqrt
-from scipy.integrate import quad
 from matplotlib import pyplot as plt
 
 from qutip import *
@@ -81,7 +80,6 @@ if __name__ == '__main__':
             omega_L=omega_L, omega_i=0
         )
         ydat[i] = abs(sum_R(alpha_op=alpha_op, ground=h0.groundstate()[1]))
-        print(ydat[i])
     plt.figure(1)
     plt.plot(xdat, ydat, '-')
     plt.show()
@@ -89,4 +87,18 @@ if __name__ == '__main__':
     # Plot S(omega) vs omega_L - omega
     xdat = np.linspace(10*100, 60*100, 50)
     ydat = np.empty_like(xdat)
-    omega_dat = omega_L * np.ones_like(xdat) - xdat
+    for xi, i in zip(xdat, count()):
+        omega = omega_L - xi
+        ham = HamiltonianSystem(
+            model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
+            omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
+        )
+        h0 = ham.h0
+        ydat[i] = spectrum(
+            H=h0, wlist=[omega], c_ops=[],
+            a_op=ms.total_creator_e, b_op=ms.total_annihilator_e
+        )
+        print('hello')
+    plt.figure(2)
+    plt.plot(xdat, ydat, '-')
+    plt.show()
