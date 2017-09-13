@@ -2,7 +2,7 @@ from __future__ import division, print_function
 
 import numpy as np
 from itertools import count
-from numpy import sqrt
+from numpy import sqrt, log
 from matplotlib import pyplot as plt
 
 from qutip import *
@@ -24,7 +24,7 @@ def dipole(model_space, mu_ge, mu_ev):
 
 
 def alpha(model_space, dipole_op, hamiltonian_op, omega_L, omega_i):
-    div_op = hamiltonian_op - (omega_L+omega_i) * model_space.identity
+    div_op = hamiltonian_op - (omega_L+omega_i) * model_space.one
     mat = div_op.data.toarray()
     newmat = np.linalg.inv(mat)
     mul_op = Qobj(newmat, dims=div_op.dims)
@@ -39,24 +39,49 @@ def sum_R(alpha_op, ground):
     )
 
 
+def c_ops(
+        model_space, kappa=0., gamma_e=0., gamma_v=0.,
+        gamma_e_phi=0., gamma_v_phi=0.
+):
+    cops = [sqrt(kappa) * model_space.annihilator_c]
+    for i in range(model_space.n):
+        an_ei = model_space.annihilator_e(i)
+        an_vi = model_space.annihilator_v(i)
+        cops.append(sqrt(gamma_e) * an_ei)
+        cops.append(sqrt(gamma_v) * an_vi)
+        cops.append(sqrt(gamma_e_phi) * an_ei.dag() * an_ei)
+        cops.append(sqrt(gamma_v_phi) * an_vi.dag() * an_vi)
+    return cops
+
+
 if __name__ == '__main__':
     # Script parameters
     n_parts = 1  # Number of paticles
 
-    omega_v = 1730 * 100  # Vibrational/cavity frequency [1/m]
+    omega_v = 1730.  # Vibrational/cavity frequency [1/cm]
     omega_c = omega_v
-    omega_e = 5 / (const.PLANK_CONST_H * const.C0)  # Electronic frequency [1/m]
+    omega_e = 5. / (const.PLANK_CONST_H * const.C0) / 100.  # Electronic frequency [1/cm]
     omega_L = omega_v * sqrt(omega_e/omega_v)
     Omega_p = omega_v**2 / omega_L
 
-    gamma_v = 13 * 100  # [1/m]
-    gamma_e = 50 * 100  # [1/m]
-    kappa = 13 * 100  # Cavity losses [1/m]
-    s = 2
-    g = 1
+    gamma_v = 13.  # [1/cm]
+    gamma_e = 50.  # [1/cm]
+    kappa = 13.  # Cavity losses [1/cm]
+    s = 2.
+    g = 0
 
     # Construct Hilbert space
     ms = ModelSpace(num_molecules=n_parts)
+
+    # Construct collapse operators
+    c_ops_list = c_ops(
+        model_space=ms,
+        kappa=kappa,
+        gamma_v=gamma_v,
+        gamma_e=gamma_e,
+        gamma_v_phi=gamma_v,
+        gamma_e_phi=gamma_e,
+    )
 
     # Construct Hamiltonian system
     hamiltonian = HamiltonianSystem(
@@ -67,6 +92,7 @@ if __name__ == '__main__':
     # Plot sum_R vs g/w_v
     xdat = np.linspace(0, 0.4, 50)
     ydat = np.empty_like(xdat)
+    ydat2 = np.empty_like(xdat)
     for xi, i in zip(xdat, count()):
         gi = xi * omega_v
         ham = HamiltonianSystem(
@@ -79,26 +105,49 @@ if __name__ == '__main__':
             model_space=ms, dipole_op=mu, hamiltonian_op=h0,
             omega_L=omega_L, omega_i=0
         )
+        ham2 = ham(t=0)
+        alpha_op2 = alpha(
+            model_space=ms, dipole_op=mu, hamiltonian_op=ham2,
+            omega_L=omega_L, omega_i=0
+        )
         ydat[i] = abs(sum_R(alpha_op=alpha_op, ground=h0.groundstate()[1]))
-    plt.figure(1)
-    plt.plot(xdat, ydat, '-')
-    plt.show()
+        ydat2[i] = abs(sum_R(alpha_op=alpha_op2, ground=ham2.groundstate()[1]))
+    title = 'Sum_R vs g/omega_v'
+    print('\n\nPlot: {}'.format(title))
+    for xi, y1i, y2i in zip(xdat, ydat, ydat2):
+        print('  {:16.8f}    {:16.8f}    {:16.8f}'.format(xi, y1i, y2i))
+    # plt.figure(1)
+    # plt.plot(xdat, ydat, '-', label='no RWA')
+    # plt.plot(xdat, ydat2, '-', label='RWA')
+    # plt.title(title)
+    # plt.xlabel('g/omega_v')
+    # plt.ylabel('sum_R')
+    # plt.show()
 
     # Plot S(omega) vs omega_L - omega
-    xdat = np.linspace(10*100, 60*100, 50)
+    omegadat = np.linspace(omega_L, omega_v, 50)
+    xdat = omega_L - omegadat
     ydat = np.empty_like(xdat)
-    for xi, i in zip(xdat, count()):
-        omega = omega_L - xi
-        ham = HamiltonianSystem(
-            model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-            omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
-        )
-        h0 = ham.h0
-        ydat[i] = spectrum(
-            H=h0, wlist=[omega], c_ops=[],
-            a_op=ms.total_creator_e, b_op=ms.total_annihilator_e
-        )
-        print('hello')
-    plt.figure(2)
-    plt.plot(xdat, ydat, '-')
+    ham = HamiltonianSystem(
+        model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
+        omega_L=omega_L, Omega_p=Omega_p, s=s, g=g
+    )
+    title = 'S(omega) vs omega_L - omega'
+    print('\n\nPlot: {}'.format(title))
+    print('    H = \n    {}'.format(ham.h0))
+    print('    c_e = \n    {}'.format(ms.total_creator_e))
+    print('    a_e = \n    {}'.format(ms.total_annihilator_e))
+    ydat = spectrum(
+        H=ham.h0, wlist=-1*xdat,
+        c_ops=c_ops_list,
+        a_op=ms.total_creator_e, b_op=ms.total_annihilator_e
+    )
+    for xi, yi in zip(xdat, ydat):
+        print('  {:16.8f}    {:16.8f}'.format(xi, yi))
+    fig, ax = plt.subplots(1, 1)
+    ax.plot(xdat, ydat, '-')
+    ax.set_title(title)
+    ax.set_xlabel('omega_L - omega')
+    ax.set_ylabel('S(omega)')
+    # ax.set_yscale('log')
     plt.show()
