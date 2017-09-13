@@ -4,6 +4,16 @@ from qutip import *
 
 
 class ModelSpace:
+    """The zero, identity, creation, and annihilation operators for the
+    Fock space defined:
+
+        F = H(ns_c, omega_c) \otimes
+            H(ns_v, omega_v)^{\otimes N} \otimes
+            H(ns_e, omega_e)^{\otimes N}
+
+    where H(ns, omega) is the one-dimensional bosonic harmonic oscillator
+    space with frequency omega, with ns oscillator orbits.
+    """
     def __init__(self, num_molecules, num_excitations):
         """Construct a model space with n particles between 3 states.
         These are the cavity, virtual, and electronic excited states,

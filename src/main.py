@@ -2,18 +2,19 @@ from __future__ import division, print_function
 
 import numpy as np
 from itertools import count
-from numpy import sqrt, log
+from numpy import sqrt
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
 from qutip import *
 
-import constants as const
 from operators import ModelSpace, HamiltonianSystem
 
 PARALLEL = False
 
-OMEGA_E = .02 / (const.PLANK_CONST_H * const.C0)
+PLANK_CONST_H = 4.135667516e-15  # h [eV * s]
+C0 = 299792458  # Speed of light in vacuum [m/s]
+
+OMEGA_E = .02 / (PLANK_CONST_H * C0)
 OMEGA_V = 1730
 OMEGA_L = (OMEGA_E + OMEGA_V) / 2
 OMEGA_P = .1 * OMEGA_V
