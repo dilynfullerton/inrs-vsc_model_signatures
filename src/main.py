@@ -56,10 +56,8 @@ def sum_R(alpha_op, ground):
     )
 
 
-def c_ops(
-        model_space, kappa=0, gamma_e=0, gamma_v=0,
-        gamma_e_phi=0, gamma_v_phi=0
-):
+def c_ops(model_space, kappa=0, gamma_e=0, gamma_v=0, gamma_e_phi=0,
+          gamma_v_phi=0):
     cops = [sqrt(kappa) * model_space.annihilator_c]
     for i in range(model_space.n):
         an_ei = model_space.annihilator_e(i)
@@ -72,33 +70,23 @@ def c_ops(
 
 
 def _par_spec_ham(h, **kwargs):
-    return spectrum(
-        H=h,
-        wlist=kwargs['wlist'],
-        c_ops=kwargs['c_ops'],
-        a_op=kwargs['a_op'],
-        b_op=kwargs['b_op'],
-    )
+    return spectrum(H=h, wlist=kwargs['wlist'], c_ops=kwargs['c_ops'],
+                     a_op=kwargs['a_op'], b_op=kwargs['b_op'])
 
 
-def plot2ab(
-        excitations=(3, 3, 1), n_parts=1, omega_e=OMEGA_E, omega_L=OMEGA_L,
-        omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P,
-        Omega_R_strong=OMEGA_R, Omega_R_weak=0, gamma_v=GAMMA_V,
-        gamma_e=GAMMA_E, kappa=KAPPA, s=S, xmin=0, xmax=6000, npts=501,
-):
+def plot2ab(excitations=(3, 3, 1), n_parts=1, omega_e=OMEGA_E, omega_L=OMEGA_L,
+            omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P,
+            Omega_R_strong=OMEGA_R, Omega_R_weak=0, gamma_v=GAMMA_V,
+            gamma_e=GAMMA_E, kappa=KAPPA, s=S, xmin=0, xmax=6000, npts=501):
     ms = ModelSpace(num_molecules=n_parts, num_excitations=excitations)
-    cops_list = c_ops(
-        model_space=ms, kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
-        gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
-    )
+    cops_list = c_ops(model_space=ms, kappa=kappa, gamma_e=gamma_e,
+                      gamma_v=gamma_v, gamma_e_phi=gamma_e, gamma_v_phi=gamma_v)
     g_vals = [omr/2/sqrt(n_parts) for omr in [Omega_R_weak, Omega_R_strong]]
     hams = []
     for gi in g_vals:
         hi = HamiltonianSystem(
             model_space=ms, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-            omega_L=omega_L, Omega_p=Omega_p, s=s, g=gi
-        )
+            omega_L=omega_L, Omega_p=Omega_p, s=s, g=gi)
         hams.append(hi(t=0))
 
     # Get plots
@@ -106,19 +94,18 @@ def plot2ab(
     if PARALLEL:
         ydats = parallel_map(
             _par_spec_ham, hams,
-            task_kwargs={
-                'wlist': -xdat, 'c_ops': cops_list,
-                'a_op': ms.total_creator_e,
-                'b_op': ms.total_annihilator_e,
-            }
+            task_kwargs={'wlist': -xdat, 'c_ops': cops_list,
+                         'a_op': ms.total_creator_e,
+                         'b_op': ms.total_annihilator_e}
         )
     else:
         ydats = []
         for h in hams:
-            ydats.append(_par_spec_ham(
-                h, wlist=-xdat, c_ops=cops_list,
-                a_op=ms.total_creator_e, b_op=ms.total_annihilator_e
-            ))
+            ydats.append(
+                _par_spec_ham(h, wlist=-xdat, c_ops=cops_list,
+                              a_op=ms.total_creator_e,
+                              b_op=ms.total_annihilator_e)
+            )
     ydat_weak, ydat_strong = [ydat_i / n_parts for ydat_i in ydats]
 
     omega_plus = omega_v * sqrt(1 + 2 * g_vals[1] / omega_v)
@@ -170,21 +157,14 @@ def plot2ab(
 
 
 def _par_spec_ops(ops, **kwargs):
-    return spectrum(
-        H=kwargs['H'],
-        wlist=kwargs['wlist'],
-        c_ops=kwargs['c_ops'],
-        a_op=ops[0],
-        b_op=ops[1]
-    )
+    return spectrum(H=kwargs['H'], wlist=kwargs['wlist'], c_ops=kwargs['c_ops'],
+                    a_op=ops[0], b_op=ops[1])
 
 
-def plot3(
-        excitations=(2, 2, 1), omega_e=OMEGA_E, omega_L=OMEGA_L,
-        omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P, Omega_R=OMEGA_R,
-        gamma_v=GAMMA_V, gamma_e=GAMMA_E, kappa=KAPPA, s=S,
-        xmin=1500, xmax=2000, npts=501,
-):
+def plot3(excitations=(2, 2, 1), omega_e=OMEGA_E, omega_L=OMEGA_L,
+          omega_v=OMEGA_V, omega_c=OMEGA_V, Omega_p=OMEGA_P, Omega_R=OMEGA_R,
+          gamma_v=GAMMA_V, gamma_e=GAMMA_E, kappa=KAPPA, s=S,
+          xmin=1500, xmax=2000, npts=501):
     # Print
     title = 'First Stokes lines for N=1, N=2'
     print('\n\nFigure: {}'.format(title))
@@ -192,14 +172,11 @@ def plot3(
 
     # Get data for N=1
     ms1 = ModelSpace(num_molecules=1, num_excitations=excitations)
-    ham1 = HamiltonianSystem(
-        model_space=ms1, omega_c=omega_c, omega_v=omega_v, omega_e=omega_e,
-        omega_L=omega_L, Omega_p=Omega_p, s=s, g=Omega_R/2/sqrt(1)
-    )
-    cops1 = c_ops(
-        model_space=ms1, kappa=kappa, gamma_e=gamma_e, gamma_v=gamma_v,
-        gamma_e_phi=gamma_e, gamma_v_phi=gamma_v
-    )
+    ham1 = HamiltonianSystem(model_space=ms1, omega_c=omega_c, omega_v=omega_v,
+                             omega_e=omega_e, omega_L=omega_L, Omega_p=Omega_p,
+                             s=s, g=Omega_R/2/sqrt(1))
+    cops1 = c_ops(model_space=ms1, kappa=kappa, gamma_e=gamma_e,
+                  gamma_v=gamma_v, gamma_e_phi=gamma_e, gamma_v_phi=gamma_v)
 
     # First plot: N=1
     ydat1 = spectrum(

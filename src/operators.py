@@ -165,4 +165,3 @@ class HamiltonianSystem:
 
     def _h(self):
         return [self.h0, [self._h1(), self._f1], [self._h2(), self._f2]]
-
