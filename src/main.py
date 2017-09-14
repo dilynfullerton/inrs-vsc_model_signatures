@@ -256,5 +256,5 @@ def plot2in():
 
 
 if __name__ == '__main__':
-    plot3(excitations=(1, 1, 1))
     # plot2ab(excitations=(3, 3, 1))
+    plot3(excitations=(1, 1, 1))
