@@ -143,6 +143,8 @@ class HamiltonianSystem:
         return str(self.h0)
 
     def _h0_coherent(self):
+        """Hamiltonian based on Equation (1)
+        """
         a_c = self.space.annihilator_c
         a_v = self.space.annihilator_v
         a_e = self.space.annihilator_e
@@ -154,6 +156,8 @@ class HamiltonianSystem:
         return h0c
 
     def _h_mol(self, i):
+        """Returns the Hamiltonian based on Equation (4) for the ith molecule
+        """
         a_vi = self.space.annihilator_v(i)
         a_ei = self.space.annihilator_e(i)
         n_vi = a_vi.dag() * a_vi
@@ -164,6 +168,8 @@ class HamiltonianSystem:
         )
 
     def _h0(self):
+        """Returns the Hamiltonian based on Equation (5)
+        """
         a_c = self.space.annihilator_c
         a_v = self.space.annihilator_v
         return (

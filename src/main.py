@@ -56,6 +56,9 @@ def sum_R(alpha_op, ground):
 
 def c_ops(model_space, kappa=0, gamma_e=0, gamma_v=0, gamma_e_phi=0,
           gamma_v_phi=0):
+    """Returns the collapse operators for the dissipation terms of
+    Equation (6)
+    """
     cops = [sqrt(kappa) * model_space.annihilator_c]
     for i in range(model_space.n):
         an_ei = model_space.annihilator_e(i)
@@ -247,10 +250,6 @@ def plot3(excitations=(2, 2, 1), omega_e=OMEGA_E, omega_L=OMEGA_L,
     ax.legend()
     plt.show()
     return xdat, ydat1, ydat2, ydat3
-
-
-def plot2in():
-    pass
 
 
 if __name__ == '__main__':
