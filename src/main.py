@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import numpy as np
 from itertools import count
 from numpy import sqrt
@@ -256,5 +254,5 @@ def plot2in():
 
 
 if __name__ == '__main__':
-    # plot2ab(excitations=(3, 3, 1))
-    plot3(excitations=(1, 1, 1))
+    plot2ab(excitations=(3, 3, 1))
+    # plot3(excitations=(1, 1, 1))

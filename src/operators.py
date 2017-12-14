@@ -16,7 +16,7 @@ class ModelSpace:
     """
     def __init__(self, num_molecules, num_excitations):
         """Construct a model space with n particles between 3 states.
-        These are the cavity, virtual, and electronic excited states,
+        These are the cavity, vibrational, and electronic excited states,
         and they have ne_c, ne_v, ne_e available excitations respectively.
         :param num_molecules: Number of molecules in the system
         :param num_excitations: Either a three-tuple containing
@@ -28,18 +28,24 @@ class ModelSpace:
             self._ne_c, self._ne_v, self._ne_e = (num_excitations,) * 3
         else:
             self._ne_c, self._ne_v, self._ne_e = num_excitations
-        self.ns_c = self._ne_c + 1
-        self.ns_v = self._ne_v + 1
-        self.ns_e = self._ne_e + 1
+        # Number of fock states in each mode
+        self.nfock_c = self._ne_c + 1
+        self.nfock_vib = self._ne_v + 1
+        self.nfock_e = self._ne_e + 1
+
+        # Dimensions for cavity, vibrational, and electronic states
+        # These are represented as lists, where the ith element of the
+        # list represents the number of Fock states for the ith particle
+        self.dims_cav = [self.nfock_c]
+        self.dims_vib = [self.nfock_vib] * self.n
+        self.dims_e = [self.nfock_e] * self.n
+        self.dims_all = self.dims_cav + self.dims_vib + self.dims_e
 
         # Operators
-        self.zero = qzero(
-            [self.ns_c] + [self.ns_v]*self.n + [self.ns_e]*self.n)
-        self.one = qeye(
-            [self.ns_c] + [self.ns_v]*self.n + [self.ns_e]*self.n)
+        self.zero = qzero(self.dims_all)
+        self.one = qeye(self.dims_all)
         self.annihilator_c = tensor(
-            destroy(self.ns_c),
-            qeye([self.ns_v]*self.n + [self.ns_e]*self.n)
+            destroy(self.nfock_c), qeye(self.dims_vib + self.dims_e)
         )
         self.creator_c = self.annihilator_c.dag()
         self.total_annihilator_e = sum(
@@ -48,9 +54,9 @@ class ModelSpace:
 
         # Kets
         self.vacuum = tensor(
-            [basis(self.ns_c, 0)] +
-            [basis(self.ns_v, 0)] * self.n +
-            [basis(self.ns_e, 0)] * self.n
+            [basis(self.nfock_c, 0)] +
+            [basis(self.nfock_vib, 0)] * self.n +
+            [basis(self.nfock_e, 0)] * self.n
         )
         self.bright = 1/sqrt(self.n) * sum(
             (self.creator_v(j) * self.vacuum for j in range(self.n)), 0)
@@ -66,23 +72,30 @@ class ModelSpace:
         return op_list
 
     def annihilator_v(self, i):
+        """Returns the annihilation operator for the ith vibrational mode
+        """
         return tensor(
-            [qeye(self.ns_c)] +
-            self._get_op_list(i, self.ns_v) +
-            [qeye(self.ns_e)] * self.n
+            qeye(self.dims_cav),
+            tensor(self._get_op_list(i, self.nfock_vib)),
+            qeye(self.dims_e)
         )
 
     def creator_v(self, i):
+        """Returns the creation operator for the ith vibrational mode
+        """
         return self.annihilator_v(i).dag()
 
     def annihilator_e(self, i):
+        """Returns the annihilation operator for the ith electronic mode
+        """
         return tensor(
-            [qeye(self.ns_c)] +
-            [qeye(self.ns_v)] * self.n +
-            self._get_op_list(i, self.ns_e)
+            qeye(self.dims_cav + self.dims_vib),
+            tensor(self._get_op_list(i, self.nfock_e))
         )
 
     def creator_e(self, i):
+        """Returns the creation operator for the ith electronic mode
+        """
         return self.annihilator_e(i).dag()
 
 
@@ -91,6 +104,17 @@ class HamiltonianSystem:
             self, model_space, omega_c, omega_v, omega_e, omega_L, Omega_p, s,
             g
     ):
+        """Construct the Hamiltonian operator based on "Signatures..."
+        :param model_space: Instance of the ModelSpace class, containing
+        all of the necessary operators
+        :param omega_c: Cavity frequency
+        :param omega_v: Vibrational frequency
+        :param omega_e: Electronic frequency
+        :param omega_L: Laser (radiation) frequency
+        :param Omega_p: Driving (probe) power
+        :param s: Huang-Rhys parameter
+        :param g: Cavity-electron coupling
+        """
         self.space = model_space
         self.n = self.space.n
         self.omega_c = omega_c
