@@ -10,7 +10,7 @@ _**WARNING**_: I have not properly cleaned up and finalized this code yet.
 
 ### Overview
 ---
-_To be written_
+(_To be written_)
 
 ### Dependencies
 ---
@@ -21,11 +21,13 @@ _To be written_
 
 ### Setup
 ---
-_To be written_
+Explanation of how to download and setup this program.
+(_To be written_)
 
 ### Usage
 ---
-_To be written_
+Explanation of how to edit and run the program.
+(_To be written_)
 
 ### References
 ---
